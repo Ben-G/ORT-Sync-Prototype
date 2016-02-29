@@ -6,9 +6,9 @@ public enum OperationTypes: String {
 }
 
 public struct Operation {
-    let type: String
-    let identifier: String = NSUUID().UUIDString
-    let payload: [String: Any]
+    public let type: String
+    public let identifier: String = NSUUID().UUIDString
+    public let payload: [String: Any]
 
     public init(type: String, payload: [String: Any]) {
         self.type = type
@@ -27,7 +27,7 @@ public struct OperationMetadata {
 }
 
 public struct OperationFailure {
-    let operationIdentifier: String
+    public let failedOperation: Operation
 }
 
 public struct State {
@@ -37,26 +37,33 @@ public struct State {
     public init() {}
 }
 
-public class Backend {
-    private (set) public var state: State
+public class Backend: CustomStringConvertible {
+    private var state: State
     private (set) public var commitLog: [(Operation, OperationMetadata)] = []
+
+    public var description: String { return "\(state)" }
 
     public init(state: State) {
         self.state = state
     }
 
-    public func commitOperations(operationCommits: [(Operation, OperationMetadata)]) -> (State, [OperationFailure]) {
+    /// Retrieve the operations a client might have missed
+    public func operationsSince(commitLogPosition: Int) -> (operations: [Operation], newHead: Int) {
+        return (self.commitLog[commitLogPosition..<self.commitLog.endIndex].map { $0.0 }, self.commitLog.endIndex)
+    }
+
+    public func commitOperations(operationCommits: [(Operation, OperationMetadata)]) -> [OperationFailure] {
         var failures: [OperationFailure]
         let operations = operationCommits.map { $0.0 }
         (self.state, failures) = handleOperations(self.state, operations: operations)
 
         // Get list of successfully commited operations
         let successfullCommits = operationCommits.filter { operation, metadata in
-            !failures.contains { operation.identifier == $0.operationIdentifier }
+            !failures.contains { operation.identifier == $0.failedOperation.identifier }
         }
 
         self.commitLog.appendContentsOf(successfullCommits)
 
-        return (self.state, failures)
+        return failures
     }
 }

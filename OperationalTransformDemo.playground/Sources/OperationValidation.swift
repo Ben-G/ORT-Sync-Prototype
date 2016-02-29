@@ -26,7 +26,7 @@ private func addUser(var state: State, operation: Operation) -> (State, Operatio
     let username = operation.payload["username"] as! String
 
     if state.users.contains({ $0.name == username }) {
-        return (state, OperationFailure(operationIdentifier: operation.identifier))
+        return (state, OperationFailure(failedOperation: operation))
     }
 
     let user = User(name: username)
@@ -43,6 +43,6 @@ private func changeUsername(var state: State, operation: Operation) -> (State, O
         state.users[index].name = newUsername
         return (state, nil)
     } else {
-        return (state, OperationFailure(operationIdentifier: operation.identifier))
+        return (state, OperationFailure(failedOperation: operation))
     }
 }
