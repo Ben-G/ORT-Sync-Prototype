@@ -31,10 +31,9 @@ for (index, commit) in backend.commitLog.enumerate() {
 print("")
 
 client1.sync()
+backend.addAdmin(client2)
 client2.sync()
 
 print("C1: \(client1.state)")
 print("C2: \(client2.state)")
 print("BE: \(backend)")
-
-

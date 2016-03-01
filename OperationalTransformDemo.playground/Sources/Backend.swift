@@ -41,7 +41,7 @@ public struct State {
 
 public class Backend: CustomStringConvertible {
     private var state: State
-    private (set) public var commitLog: [(Operation, OperationMetadata)] = []
+    private (set) public var commitLog: [(Operation, OperationMetadata, Int)] = []
 
     public var description: String { return "\(state)" }
 
@@ -56,8 +56,11 @@ public class Backend: CustomStringConvertible {
     }
 
     /// Retrieve the operations a client might have missed
-    public func operationsSince(commitLogPosition: Int, client: Client) -> (operations: [Operation], newHead: Int) {
-        let missedCommits = self.commitLog[commitLogPosition..<self.commitLog.endIndex].map { $0.0 }.filter { operation in
+    public func operationsSince(commitLogPosition: Set<Int>, client: Client) -> (operations: [Operation], newHead: Set<Int>) {
+        let missedCommitMetadata = self.commitLog[0..<self.commitLog.endIndex]
+            .filter { _, _, index in
+                return !commitLogPosition.contains(index)
+            }.filter { operation, _, _ in
 
             if operation.type == OperationTypes.AddUser.rawValue || operation.type == OperationTypes.ChangeUsername.rawValue {
                 return self.state.userAdmins.contains { $0.identifier == client.identifier }
@@ -65,7 +68,10 @@ public class Backend: CustomStringConvertible {
             return true
         }
 
-        return (missedCommits, self.commitLog.endIndex)
+        let commitIdentifers = Set(missedCommitMetadata.map { $0.2 })
+        let missedCommits = missedCommitMetadata.map { $0.0 }
+
+        return (missedCommits, commitIdentifers)
     }
 
     public func commitOperations(operationCommits: [(Operation, OperationMetadata)]) -> [OperationFailure] {
@@ -78,7 +84,9 @@ public class Backend: CustomStringConvertible {
             !failures.contains { operation.identifier == $0.failedOperation.identifier }
         }
 
-        self.commitLog.appendContentsOf(successfullCommits)
+        for commit in successfullCommits {
+            self.commitLog.append((commit.0, commit.1, self.commitLog.count))
+        }
 
         return failures
     }

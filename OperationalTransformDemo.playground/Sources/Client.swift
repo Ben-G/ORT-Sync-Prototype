@@ -2,8 +2,8 @@ import Foundation
 
 public class Client {
     let identifier: String
-    // Pointer to the position in the server commit log that this client is aware about
-    var serverCommitLogCount: Int = 0
+    // Set of server commit logs that this client is aware about
+    var serverCommitLogSet: Set<Int> = []
     public var state: State
     var backend: Backend
     var serverState: State {
@@ -23,8 +23,12 @@ public class Client {
     }
 
     public func sync() {
-        let (missedOperations, newHead) = backend.operationsSince(self.serverCommitLogCount, client: self)
-        self.serverCommitLogCount = newHead
+        let (missedOperations, syncedCommits) = backend.operationsSince(self.serverCommitLogSet, client: self)
+
+        for commit in syncedCommits {
+            self.serverCommitLogSet.insert(commit)
+        }
+
         (self.serverState, _) = handleOperations(self.serverState, operations: missedOperations)
 
         let errors = backend.commitOperations(self.commitLog)
