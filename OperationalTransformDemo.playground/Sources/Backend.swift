@@ -33,6 +33,8 @@ public struct OperationFailure {
 public struct State {
     var users: [User] = []
     var sheets: [Sheet] = []
+    // Clients that have permission to see/modify users
+    var userAdmins: [Client] = []
 
     public init() {}
 }
@@ -47,9 +49,23 @@ public class Backend: CustomStringConvertible {
         self.state = state
     }
 
+    public func addAdmin(client: Client) {
+        if !(self.state.userAdmins.contains { $0.identifier == client.identifier }) {
+            self.state.userAdmins.append(client)
+        }
+    }
+
     /// Retrieve the operations a client might have missed
-    public func operationsSince(commitLogPosition: Int) -> (operations: [Operation], newHead: Int) {
-        return (self.commitLog[commitLogPosition..<self.commitLog.endIndex].map { $0.0 }, self.commitLog.endIndex)
+    public func operationsSince(commitLogPosition: Int, client: Client) -> (operations: [Operation], newHead: Int) {
+        let missedCommits = self.commitLog[commitLogPosition..<self.commitLog.endIndex].map { $0.0 }.filter { operation in
+
+            if operation.type == OperationTypes.AddUser.rawValue || operation.type == OperationTypes.ChangeUsername.rawValue {
+                return self.state.userAdmins.contains { $0.identifier == client.identifier }
+            }
+            return true
+        }
+
+        return (missedCommits, self.commitLog.endIndex)
     }
 
     public func commitOperations(operationCommits: [(Operation, OperationMetadata)]) -> [OperationFailure] {
