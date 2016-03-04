@@ -39,9 +39,16 @@ public struct State {
     public init() {}
 }
 
+public enum PermissionChange {
+    case Admin
+    case NotAdmin
+}
+
 public class Backend: CustomStringConvertible {
     private var state: State
     private (set) public var commitLog: [(Operation, OperationMetadata, Int)] = []
+    // Maps Client Identifier to Permission Change
+    private (set) public var permissionChangeLog: [String: [PermissionChange]] = [:]
 
     public var description: String { return "\(state)" }
 
@@ -55,8 +62,14 @@ public class Backend: CustomStringConvertible {
         }
     }
 
+    public func removeAdmin(client: Client) {
+        if let index = (self.state.userAdmins.indexOf { $0.identifier == client.identifier }) {
+            self.state.userAdmins.removeAtIndex(index)
+        }
+    }
+
     /// Retrieve the operations a client might have missed
-    public func operationsSince(commitLogPosition: Set<Int>, client: Client) -> (operations: [Operation], newHead: Set<Int>) {
+    public func operationsSince(commitLogPosition: Set<Int>, permissionIndex: Int, client: Client) -> (operations: [Operation], newHead: Set<Int>, entitiesGained: [User], entitiesLost: [User], newPermissionIndex: Int) {
         let missedCommitMetadata = self.commitLog[0..<self.commitLog.endIndex]
             .filter { _, _, index in
                 return !commitLogPosition.contains(index)
@@ -71,7 +84,28 @@ public class Backend: CustomStringConvertible {
         let commitIdentifers = Set(missedCommitMetadata.map { $0.2 })
         let missedCommits = missedCommitMetadata.map { $0.0 }
 
-        return (missedCommits, commitIdentifers)
+        var entitiesGained: [User] = []
+        var entitiesLost: [User] = []
+
+        if permissionIndex == -1 {
+            // setup default permission
+            self.permissionChangeLog[client.identifier] = [.NotAdmin]
+        } else {
+            // check for transition
+            guard let oldPermissionState = self.permissionChangeLog[client.identifier]?[permissionIndex],
+                let newPermissionState = self.permissionChangeLog[client.identifier]?.last else { return ([],[],[],[],0) }
+
+            switch (oldPermissionState, newPermissionState) {
+            case (.Admin, .NotAdmin):
+                entitiesGained = self.state.users
+            case (.NotAdmin, .Admin):
+                entitiesLost = self.state.users
+            default:
+                break
+            }
+        }
+
+        return (missedCommits, commitIdentifers, entitiesGained, entitiesLost, self.permissionChangeLog[client.identifier]!.count)
     }
 
     public func commitOperations(operationCommits: [(Operation, OperationMetadata)]) -> [OperationFailure] {

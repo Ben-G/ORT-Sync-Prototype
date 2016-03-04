@@ -4,6 +4,8 @@ public class Client {
     let identifier: String
     // Set of server commit logs that this client is aware about
     var serverCommitLogSet: Set<Int> = []
+    var serverPermissionIndex: Int = -1
+
     public var state: State
     var backend: Backend
     var serverState: State {
@@ -23,7 +25,11 @@ public class Client {
     }
 
     public func sync() {
-        let (missedOperations, syncedCommits) = backend.operationsSince(self.serverCommitLogSet, client: self)
+        let (missedOperations, syncedCommits, entitiesGained, entitiesLost, serverPermissionIndex) = backend.operationsSince(self.serverCommitLogSet, permissionIndex: self.serverPermissionIndex, client: self)
+
+        print(missedOperations, syncedCommits, entitiesGained, entitiesLost, serverPermissionIndex)
+
+        self.serverPermissionIndex = serverPermissionIndex
 
         for commit in syncedCommits {
             self.serverCommitLogSet.insert(commit)

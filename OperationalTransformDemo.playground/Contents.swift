@@ -33,6 +33,9 @@ print("")
 client1.sync()
 backend.addAdmin(client2)
 client2.sync()
+backend.removeAdmin(client2)
+// We now expect the user to be removed
+client2.sync()
 
 print("C1: \(client1.state)")
 print("C2: \(client2.state)")
